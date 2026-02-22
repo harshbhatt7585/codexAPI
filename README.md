@@ -30,10 +30,36 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Login
+
+Authenticate Codex CLI before starting the API:
+
+```bash
+codex login
+```
+
 ## Run locally
 
 ```bash
 uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+Or use the wrapper that checks Codex auth first:
+
+```bash
+./run_server.sh
+```
+
+Wrapper behavior:
+
+- Runs `codex login status`.
+- If not authenticated, runs `codex login`.
+- Starts `uvicorn app:app --host 0.0.0.0 --port 8000`.
+
+Optional overrides:
+
+```bash
+HOST=127.0.0.1 PORT=9000 APP_MODULE=app:app ./run_server.sh --reload
 ```
 
 Health check:

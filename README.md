@@ -77,7 +77,7 @@ Request body:
 ```json
 {
   "prompt": "Write hello world in Python",
-  "timeout_s": 180,
+  "timeout_s": 600,
   "include_events": true,
   "include_raw_output": false,
   "extra_args": []
@@ -87,10 +87,16 @@ Request body:
 Field notes:
 
 - `prompt` (required): non-empty string.
-- `timeout_s`: 1 to 1800 seconds (default `180`).
+- `timeout_s`: 1 to 1800 seconds (default `600`).
 - `include_events`: include parsed JSON events in response (default `true`).
 - `include_raw_output`: include raw `stdout_text`/`stderr_text` (default `false`).
 - `extra_args`: additional CLI flags passed to `codex exec --json`.
+
+By default, the API prepends:
+
+- `--skip-git-repo-check`
+- `--sandbox workspace-write`
+- `-a never`
 
 Example:
 

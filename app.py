@@ -8,10 +8,18 @@ from pydantic import BaseModel, Field
 
 from codex_runner import extract_final_text, run_codex_exec
 
+DEFAULT_CODEX_ARGS = [
+    "--skip-git-repo-check",
+    "--sandbox",
+    "workspace-write",
+    "-a",
+    "never",
+]
+
 
 class CodexRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
-    timeout_s: int = Field(default=180, ge=1, le=1800)
+    timeout_s: int = Field(default=600, ge=1, le=1800)
     include_events: bool = Field(default=True)
     include_raw_output: bool = Field(default=False)
     extra_args: List[str] = Field(default_factory=list)
@@ -36,13 +44,15 @@ def health() -> Dict[str, str]:
 
 @app.post("/codex", response_model=CodexSuccessResponse)
 def codex_endpoint(req: CodexRequest) -> CodexSuccessResponse:
+    codex_args = [*DEFAULT_CODEX_ARGS, *req.extra_args]
+
     # One request = one isolated temporary workspace.
     with tempfile.TemporaryDirectory(prefix="codex_sandbox_") as workdir:
         result = run_codex_exec(
             req.prompt,
             cwd=workdir,
             timeout_s=req.timeout_s,
-            extra_args=req.extra_args,
+            extra_args=codex_args,
         )
 
     if result.timed_out:
@@ -51,6 +61,8 @@ def codex_endpoint(req: CodexRequest) -> CodexSuccessResponse:
             detail={
                 "error": "codex exec timed out",
                 "exit_code": result.exit_code,
+                "timeout_s": req.timeout_s,
+                "command": result.command,
                 "stderr_tail": result.stderr_text[-4000:],
             },
         )
@@ -61,6 +73,7 @@ def codex_endpoint(req: CodexRequest) -> CodexSuccessResponse:
             detail={
                 "error": "codex exec failed",
                 "exit_code": result.exit_code,
+                "command": result.command,
                 "stderr_tail": result.stderr_text[-4000:],
                 "stdout_tail": result.stdout_text[-4000:],
             },

@@ -8,7 +8,9 @@ A minimal FastAPI service that executes `codex exec --json` and returns structur
 - Runs Codex in non-interactive JSON mode.
 - Parses JSONL event output from `stdout`.
 - Extracts a best-effort `final_text` from events.
-- Executes each request in its own temporary workspace.
+- Supports two workspace modes:
+  - `POST /codex`: one-shot temporary workspace (deleted after request).
+  - `POST /codex/conv`: persistent conversation workspace (reused by `conversation_id`).
 
 ## Project files
 
@@ -54,7 +56,7 @@ Wrapper behavior:
 
 - Runs `codex login status`.
 - If not authenticated, runs `codex login`.
-- Starts `uvicorn app:app --host 0.0.0.0 --port 8000`.
+- Starts `uvicorn app:app --host 0.0.0.0 --port 8001` by default (`PORT` env var overrides).
 
 Optional overrides:
 
@@ -62,10 +64,18 @@ Optional overrides:
 HOST=127.0.0.1 PORT=9000 APP_MODULE=app:app ./run_server.sh --reload
 ```
 
+If server logs show `0.0.0.0:<PORT>`, call it from your machine as `127.0.0.1:<PORT>`.
+
+Example for your current run on port `8001`:
+
+```bash
+BASE_URL=http://127.0.0.1:8001
+```
+
 Health check:
 
 ```bash
-curl http://localhost:8000/health
+curl "$BASE_URL/health"
 ```
 
 ## API
@@ -96,12 +106,11 @@ By default, the API prepends:
 
 - `--skip-git-repo-check`
 - `--sandbox workspace-write`
-- `-a never`
 
 Example:
 
 ```bash
-curl -X POST http://localhost:8000/codex \
+curl -X POST "$BASE_URL/codex" \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Create a Python function that reverses a string",
@@ -121,6 +130,57 @@ Successful response shape:
   "stderr_text": null,
   "json_parse_errors": 0
 }
+```
+
+### `POST /codex/conv`
+
+Use this endpoint when you want files to persist between calls.
+
+Request body:
+
+```json
+{
+  "prompt": "Create train.py",
+  "conversation_id": "rl-demo-1",
+  "timeout_s": 600,
+  "include_events": false,
+  "include_raw_output": false,
+  "extra_args": []
+}
+```
+
+Field notes:
+
+- `conversation_id` (optional): if provided, reuses that workspace; if omitted, server creates one.
+- Workspace path defaults to `./conversations/<conversation_id>`.
+- Override base path with env var `CODEX_CONVERSATION_ROOT`.
+
+Successful response shape:
+
+```json
+{
+  "exit_code": 0,
+  "final_text": "...",
+  "events": null,
+  "stdout_text": null,
+  "stderr_text": null,
+  "json_parse_errors": 0,
+  "conversation_id": "rl-demo-1",
+  "workspace_dir": "/abs/path/to/conversations/rl-demo-1"
+}
+```
+
+Conversation example:
+
+```bash
+curl -X POST "$BASE_URL/codex/conv" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create notes.txt with line hello",
+    "conversation_id": "my-rl-conv",
+    "timeout_s": 600,
+    "include_events": false
+  }'
 ```
 
 ## Error behavior

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8000}"
+PORT="${PORT:-8001}"
 APP_MODULE="${APP_MODULE:-app:app}"
 
 if ! command -v codex >/dev/null 2>&1; then

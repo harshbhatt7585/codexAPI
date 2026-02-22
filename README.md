@@ -1,31 +1,36 @@
-# Codex Exec JSON Wrapper (Python)
+# Codex CLI API
 
-This project exposes `codex exec --json` through a small Python interface and FastAPI endpoint.
+A minimal FastAPI service that executes `codex exec --json` and returns structured results.
 
 ## What it does
 
-- Runs Codex in non-interactive mode (`codex exec --json <prompt>`).
-- Parses JSONL events from `stdout` (best effort).
-- Creates a fresh temporary workspace per API request.
-- Returns structured event data and a best-effort final assistant text.
+- Accepts a prompt over HTTP.
+- Runs Codex in non-interactive JSON mode.
+- Parses JSONL event output from `stdout`.
+- Extracts a best-effort `final_text` from events.
+- Executes each request in its own temporary workspace.
 
-## Files
+## Project files
 
-- `codex_runner.py`: subprocess runner + JSONL parsing.
-- `app.py`: FastAPI service.
+- `app.py`: FastAPI app and HTTP endpoints.
+- `codex_runner.py`: subprocess execution, timeout handling, JSONL parsing, and final text extraction.
+- `requirements.txt`: runtime dependencies.
 
 ## Requirements
 
 - Python 3.10+
-- Codex CLI installed and authenticated in the environment where this runs.
+- Codex CLI installed and available on `PATH`
+- Codex authenticated in the runtime environment
 
-Install Python dependencies:
+## Setup
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run API
+## Run locally
 
 ```bash
 uvicorn app:app --host 0.0.0.0 --port 8000
@@ -37,15 +42,63 @@ Health check:
 curl http://localhost:8000/health
 ```
 
-Run Codex:
+## API
+
+### `POST /codex`
+
+Request body:
+
+```json
+{
+  "prompt": "Write hello world in Python",
+  "timeout_s": 180,
+  "include_events": true,
+  "include_raw_output": false,
+  "extra_args": []
+}
+```
+
+Field notes:
+
+- `prompt` (required): non-empty string.
+- `timeout_s`: 1 to 1800 seconds (default `180`).
+- `include_events`: include parsed JSON events in response (default `true`).
+- `include_raw_output`: include raw `stdout_text`/`stderr_text` (default `false`).
+- `extra_args`: additional CLI flags passed to `codex exec --json`.
+
+Example:
 
 ```bash
 curl -X POST http://localhost:8000/codex \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"Write hello world in Python","timeout_s":120}'
+  -d '{
+    "prompt": "Create a Python function that reverses a string",
+    "timeout_s": 120,
+    "include_events": true
+  }'
 ```
 
-## Notes
+Successful response shape:
 
-- This implementation returns full event streams by default (`include_events=true`).
-- For safer deployment, run this service inside an isolated container with strict CPU/memory/time limits and restricted filesystem/network access.
+```json
+{
+  "exit_code": 0,
+  "final_text": "...",
+  "events": [],
+  "stdout_text": null,
+  "stderr_text": null,
+  "json_parse_errors": 0
+}
+```
+
+## Error behavior
+
+- `504`: Codex process timed out.
+- `500`: Codex exited non-zero.
+- Error responses include `exit_code` and truncated `stdout`/`stderr` tails for debugging.
+
+## Security and deployment notes
+
+- This service executes a local CLI process from user input.
+- Run in an isolated environment (container/VM) with strict CPU, memory, filesystem, and network controls.
+- Consider authentication/rate limiting before exposing this endpoint outside trusted networks.

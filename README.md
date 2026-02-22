@@ -43,7 +43,7 @@ codex login
 ## Run locally
 
 ```bash
-uvicorn app:app --host 0.0.0.0 --port 8000
+uvicorn app:app --host 0.0.0.0 --port 8001
 ```
 
 Or use the wrapper that checks Codex auth first:
@@ -64,19 +64,52 @@ Optional overrides:
 HOST=127.0.0.1 PORT=9000 APP_MODULE=app:app ./run_server.sh --reload
 ```
 
-If server logs show `0.0.0.0:<PORT>`, call it from your machine as `127.0.0.1:<PORT>`.
+## How to use (quickstart)
 
-Example for your current run on port `8001`:
+1. Start the server:
+
+```bash
+./run_server.sh
+```
+
+2. Set your local API base URL (if server binds to `0.0.0.0:<PORT>`, call it as `127.0.0.1:<PORT>`):
 
 ```bash
 BASE_URL=http://127.0.0.1:8001
 ```
 
-Health check:
+3. Verify service is up:
 
 ```bash
 curl "$BASE_URL/health"
 ```
+
+4. One-shot request (temporary workspace, cleaned after request):
+
+```bash
+curl -X POST "$BASE_URL/codex" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Write a Python function to reverse a string",
+    "timeout_s": 600,
+    "include_events": false
+  }'
+```
+
+5. Persistent conversation request (workspace reused by `conversation_id`):
+
+```bash
+curl -X POST "$BASE_URL/codex/conv" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create notes.txt with line hello",
+    "conversation_id": "my-rl-conv",
+    "timeout_s": 600,
+    "include_events": false
+  }'
+```
+
+Call `/codex/conv` again with the same `conversation_id` to continue in the same workspace.
 
 ## API
 

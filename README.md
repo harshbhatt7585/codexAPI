@@ -1,6 +1,7 @@
 # Codex CLI API
 
 A minimal stateless FastAPI wrapper around `codex exec --json`.
+That means if you have ChatGPT+ subscription you can utilize Codex as an API also without paying for tokens.
 
 ## Endpoints
 

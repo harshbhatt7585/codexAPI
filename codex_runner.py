@@ -18,35 +18,6 @@ class CodexResult:
     command: List[str]
 
 
-def _truncate_tail(text: str, max_chars: int) -> str:
-    if max_chars <= 0:
-        return ""
-    if len(text) <= max_chars:
-        return text
-    return text[-max_chars:]
-
-
-def _parse_jsonl_events(stdout_text: str) -> tuple[List[Dict[str, Any]], int]:
-    events: List[Dict[str, Any]] = []
-    parse_errors = 0
-
-    for raw_line in stdout_text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            parse_errors += 1
-            continue
-        if isinstance(parsed, dict):
-            events.append(parsed)
-        else:
-            parse_errors += 1
-
-    return events, parse_errors
-
-
 def run_codex_exec(
     prompt: str,
     *,
@@ -64,55 +35,27 @@ def run_codex_exec(
     if not prompt or not prompt.strip():
         raise ValueError("prompt must be a non-empty string")
 
-    if cwd is None:
-        cwd = os.getcwd()
-
-    cmd = [codex_bin, "exec", "--json"]
-    if extra_args:
-        cmd.extend(extra_args)
-    cmd.append(prompt)
-
-    child_env = os.environ.copy()
-    if env:
-        child_env.update(env)
-
-    timed_out = False
-    stdout_text = ""
-    stderr_text = ""
-    exit_code = 0
-
-    try:
-        completed = subprocess.run(
-            cmd,
-            cwd=cwd,
-            env=child_env,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            check=False,
-        )
-        exit_code = completed.returncode
-        stdout_text = completed.stdout or ""
-        stderr_text = completed.stderr or ""
-    except subprocess.TimeoutExpired as exc:
-        timed_out = True
-        exit_code = 124
-        timeout_stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-        timeout_stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-        stdout_text = timeout_stdout
-        stderr_text = timeout_stderr + f"\nProcess timed out after {timeout_s}s."
-
-    events, parse_errors = _parse_jsonl_events(stdout_text)
-    stdout_text = _truncate_tail(stdout_text, max_stdout_chars)
-    stderr_text = _truncate_tail(stderr_text, max_stderr_chars)
+    cmd = [codex_bin, "exec", "--json", *(extra_args or []), prompt]
+    completed = subprocess.run(
+        cmd,
+        cwd=cwd or os.getcwd(),
+        env=os.environ | (env or {}),
+        capture_output=True,
+        text=True,
+        timeout=timeout_s,
+        check=False,
+    )
+    stdout_text = (completed.stdout or "")[-max_stdout_chars:]
+    stderr_text = (completed.stderr or "")[-max_stderr_chars:]
+    events = [json.loads(line) for line in stdout_text.splitlines() if line.strip()]
 
     return CodexResult(
-        exit_code=exit_code,
+        exit_code=completed.returncode,
         events=events,
         stdout_text=stdout_text,
         stderr_text=stderr_text,
-        timed_out=timed_out,
-        json_parse_errors=parse_errors,
+        timed_out=False,
+        json_parse_errors=0,
         command=cmd,
     )
 
@@ -124,41 +67,26 @@ def extract_final_text(events: Sequence[Dict[str, Any]]) -> Optional[str]:
     for event in reversed(list(events)):
         event_type = event.get("type")
         if event_type == "item.completed":
-            item = event.get("item")
-            if isinstance(item, dict):
-                item_type = item.get("type")
-                item_text = item.get("text")
-                if item_type in {"agent_message", "message"} and isinstance(item_text, str) and item_text.strip():
-                    return item_text
+            item = event.get("item") or {}
+            if item.get("type") in {"agent_message", "message"} and item.get("text"):
+                return item["text"]
 
         output_text = event.get("output_text")
-        if isinstance(output_text, str) and output_text.strip():
+        if output_text:
             return output_text
 
-        response = event.get("response")
-        if isinstance(response, dict):
-            response_output_text = response.get("output_text")
-            if isinstance(response_output_text, str) and response_output_text.strip():
-                return response_output_text
+        response = event.get("response") or {}
+        response_output_text = response.get("output_text")
+        if response_output_text:
+            return response_output_text
 
-            output = response.get("output")
-            if isinstance(output, list):
-                chunks: List[str] = []
-                for item in output:
-                    if not isinstance(item, dict):
-                        continue
-                    content = item.get("content")
-                    if not isinstance(content, list):
-                        continue
-                    for content_item in content:
-                        if not isinstance(content_item, dict):
-                            continue
-                        text = content_item.get("text")
-                        if isinstance(text, str):
-                            chunks.append(text)
-                if chunks:
-                    joined = "\n".join(chunks).strip()
-                    if joined:
-                        return joined
+        chunks = [
+            content_item["text"]
+            for item in response.get("output", [])
+            for content_item in item.get("content", [])
+            if content_item.get("text")
+        ]
+        if chunks:
+            return "\n".join(chunks)
 
     return None

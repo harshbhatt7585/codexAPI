@@ -24,7 +24,7 @@ PROMPT_PREFIX = os.environ.get("CODEX_PROMPT_PREFIX", DEFAULT_PROMPT_PREFIX).str
 class CodexRequest(BaseModel):
     prompt: str = Field(..., min_length=1)
     timeout_s: int = Field(default=600, ge=1, le=1800)
-    include_events: bool = Field(default=True)
+    include_events: bool = Field(default=False)
     include_raw_output: bool = Field(default=False)
     extra_args: List[str] = Field(default_factory=list)
 

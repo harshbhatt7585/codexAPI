@@ -113,7 +113,7 @@ Request body:
 {
   "prompt": "Explain what a Python decorator is",
   "timeout_s": 600,
-  "include_events": true,
+  "include_events": false,
   "include_raw_output": false,
   "extra_args": []
 }
@@ -123,7 +123,7 @@ Field notes:
 
 - `prompt` (required): non-empty string.
 - `timeout_s`: 1 to 1800 seconds (default `600`).
-- `include_events`: include parsed JSON events in response (default `true`).
+- `include_events`: include parsed JSON events in response (default `false`).
 - `include_raw_output`: include raw `stdout_text`/`stderr_text` (default `false`).
 - `extra_args`: additional CLI flags passed to `codex exec --json`.
 - The server does not store conversation state. If you need context, send it in the prompt from the client.
@@ -141,7 +141,7 @@ curl -X POST "$BASE_URL/codex/response/" \
   -d '{
     "prompt": "System context: We are comparing Python web frameworks.\nUser: What are the tradeoffs between FastAPI and Flask?",
     "timeout_s": 120,
-    "include_events": true
+    "include_events": false
   }'
 ```
 

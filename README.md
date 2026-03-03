@@ -8,6 +8,7 @@ A minimal FastAPI service that executes `codex exec --json` and returns structur
 - Runs Codex in non-interactive JSON mode.
 - Parses JSONL event output from `stdout`.
 - Extracts a best-effort `final_text` from events.
+- Prepends a default assistant-only instruction so requests stay in planning/Q&A mode and avoid file creation.
 - Supports two workspace modes:
   - `POST /codex`: one-shot temporary workspace (deleted after request).
   - `POST /codex/conv`: persistent conversation workspace (reused by `conversation_id`).
@@ -64,6 +65,12 @@ Optional overrides:
 HOST=127.0.0.1 PORT=9000 APP_MODULE=app:app ./run_server.sh --reload
 ```
 
+Prompt behavior:
+
+- Every request is automatically prefixed with: `You are a friendly assistant. Only plan and answer users' questions. Do not create any files.`
+- Override that prefix with `CODEX_PROMPT_PREFIX`.
+- Set `CODEX_PROMPT_PREFIX` to an empty string to disable prefixing entirely.
+
 ## How to use (quickstart)
 
 1. Start the server:
@@ -90,7 +97,7 @@ curl "$BASE_URL/health"
 curl -X POST "$BASE_URL/codex" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Write a Python function to reverse a string",
+    "prompt": "What are three ways to reverse a string in Python?",
     "timeout_s": 600,
     "include_events": false
   }'
@@ -102,7 +109,7 @@ curl -X POST "$BASE_URL/codex" \
 curl -X POST "$BASE_URL/codex/conv" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Create notes.txt with line hello",
+    "prompt": "Summarize the tradeoffs between REST and GraphQL",
     "conversation_id": "my-rl-conv",
     "timeout_s": 600,
     "include_events": false
@@ -119,7 +126,7 @@ Request body:
 
 ```json
 {
-  "prompt": "Write hello world in Python",
+  "prompt": "Explain what a Python decorator is",
   "timeout_s": 600,
   "include_events": true,
   "include_raw_output": false,

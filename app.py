@@ -17,6 +17,11 @@ DEFAULT_CODEX_ARGS = [
     "--sandbox",
     "workspace-write",
 ]
+DEFAULT_PROMPT_PREFIX = (
+    "You are a friendly assistant. Only plan and answer users' questions. "
+    "Do not create any files."
+)
+PROMPT_PREFIX = os.environ.get("CODEX_PROMPT_PREFIX", DEFAULT_PROMPT_PREFIX).strip()
 CONVERSATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 DEFAULT_CONVERSATION_ROOT = Path(__file__).resolve().parent / "conversations"
 CONVERSATION_ROOT = Path(
@@ -88,11 +93,17 @@ def _conversation_workdir(conversation_id: str) -> Path:
     return workdir
 
 
+def _build_prompt(prompt: str) -> str:
+    if not PROMPT_PREFIX:
+        return prompt
+    return f"{PROMPT_PREFIX}\n\nUser request:\n{prompt}"
+
+
 def _run_request(req: CodexRequest, workdir: str) -> CodexSuccessResponse:
     codex_args = [*DEFAULT_CODEX_ARGS, *req.extra_args]
 
     result = run_codex_exec(
-        req.prompt,
+        _build_prompt(req.prompt),
         cwd=workdir,
         timeout_s=req.timeout_s,
         extra_args=codex_args,

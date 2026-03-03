@@ -35,6 +35,8 @@ codex login
 
 ## Run
 
+Use this bash script which will authenticate the codex and run the server
+
 ```bash
 ./run_server.sh
 ```
@@ -44,16 +46,6 @@ Or directly:
 ```bash
 uvicorn app:app --host 0.0.0.0 --port 8001
 ```
-
-## Prompt Prefix
-
-Every request is automatically prefixed with:
-
-```text
-You are a friendly assistant. Only plan and answer users' questions. Do not create any files.
-```
-
-Override it with `CODEX_PROMPT_PREFIX`.
 
 ## Quickstart
 

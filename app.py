@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import os
-import re
 import tempfile
-from pathlib import Path
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -22,11 +19,6 @@ DEFAULT_PROMPT_PREFIX = (
     "Do not create any files."
 )
 PROMPT_PREFIX = os.environ.get("CODEX_PROMPT_PREFIX", DEFAULT_PROMPT_PREFIX).strip()
-CONVERSATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-DEFAULT_CONVERSATION_ROOT = Path(__file__).resolve().parent / "conversations"
-CONVERSATION_ROOT = Path(
-    os.environ.get("CODEX_CONVERSATION_ROOT", str(DEFAULT_CONVERSATION_ROOT))
-).expanduser().resolve()
 
 
 class CodexRequest(BaseModel):
@@ -46,51 +38,12 @@ class CodexSuccessResponse(BaseModel):
     json_parse_errors: int
 
 
-class CodexConversationRequest(CodexRequest):
-    conversation_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
-
-
-class CodexConversationResponse(CodexSuccessResponse):
-    conversation_id: str
-    workspace_dir: str
-
-
 app = FastAPI(title="Codex Exec API", version="0.1.0")
 
 
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
-
-
-def _resolve_conversation_id(raw_conversation_id: Optional[str]) -> str:
-    if raw_conversation_id is None:
-        return f"conv_{uuid4().hex[:12]}"
-
-    conversation_id = raw_conversation_id.strip()
-    if not conversation_id:
-        raise HTTPException(status_code=400, detail={"error": "conversation_id cannot be empty"})
-
-    if not CONVERSATION_ID_RE.fullmatch(conversation_id):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": (
-                    "conversation_id must match ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ "
-                    "(letters, numbers, dot, underscore, dash)"
-                )
-            },
-        )
-
-    return conversation_id
-
-
-def _conversation_workdir(conversation_id: str) -> Path:
-    workdir = (CONVERSATION_ROOT / conversation_id).resolve()
-    if CONVERSATION_ROOT != workdir and CONVERSATION_ROOT not in workdir.parents:
-        raise HTTPException(status_code=400, detail={"error": "invalid conversation_id path"})
-    workdir.mkdir(parents=True, exist_ok=True)
-    return workdir
 
 
 def _build_prompt(prompt: str) -> str:
@@ -153,25 +106,3 @@ def codex_endpoint(req: CodexRequest) -> CodexSuccessResponse:
 @app.post("/codex/", response_model=CodexSuccessResponse, include_in_schema=False)
 def codex_endpoint_with_slash(req: CodexRequest) -> CodexSuccessResponse:
     return codex_endpoint(req)
-
-
-@app.post("/codex/conv", response_model=CodexConversationResponse)
-def codex_conversation_endpoint(req: CodexConversationRequest) -> CodexConversationResponse:
-    conversation_id = _resolve_conversation_id(req.conversation_id)
-    workdir = _conversation_workdir(conversation_id)
-    result = _run_request(req, workdir=str(workdir))
-    return CodexConversationResponse(
-        exit_code=result.exit_code,
-        final_text=result.final_text,
-        events=result.events,
-        stdout_text=result.stdout_text,
-        stderr_text=result.stderr_text,
-        json_parse_errors=result.json_parse_errors,
-        conversation_id=conversation_id,
-        workspace_dir=str(workdir),
-    )
-
-
-@app.post("/codex/conv/", response_model=CodexConversationResponse, include_in_schema=False)
-def codex_conversation_endpoint_with_slash(req: CodexConversationRequest) -> CodexConversationResponse:
-    return codex_conversation_endpoint(req)

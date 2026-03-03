@@ -9,9 +9,7 @@ A minimal FastAPI service that executes `codex exec --json` and returns structur
 - Parses JSONL event output from `stdout`.
 - Extracts a best-effort `final_text` from events.
 - Prepends a default assistant-only instruction so requests stay in planning/Q&A mode and avoid file creation.
-- Supports two workspace modes:
-  - `POST /codex`: one-shot temporary workspace (deleted after request).
-  - `POST /codex/conv`: persistent conversation workspace (reused by `conversation_id`).
+- Exposes a single stateless `POST /codex` endpoint.
 
 ## Project files
 
@@ -91,7 +89,7 @@ BASE_URL=http://127.0.0.1:8001
 curl "$BASE_URL/health"
 ```
 
-4. One-shot request (temporary workspace, cleaned after request):
+4. Send a request:
 
 ```bash
 curl -X POST "$BASE_URL/codex" \
@@ -103,20 +101,7 @@ curl -X POST "$BASE_URL/codex" \
   }'
 ```
 
-5. Persistent conversation request (workspace reused by `conversation_id`):
-
-```bash
-curl -X POST "$BASE_URL/codex/conv" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Summarize the tradeoffs between REST and GraphQL",
-    "conversation_id": "my-rl-conv",
-    "timeout_s": 600,
-    "include_events": false
-  }'
-```
-
-Call `/codex/conv` again with the same `conversation_id` to continue in the same workspace.
+5. If you want client-managed context, include prior turns in the `prompt` you send. The server does not keep conversation state.
 
 ## API
 
@@ -141,6 +126,7 @@ Field notes:
 - `include_events`: include parsed JSON events in response (default `true`).
 - `include_raw_output`: include raw `stdout_text`/`stderr_text` (default `false`).
 - `extra_args`: additional CLI flags passed to `codex exec --json`.
+- The server does not store conversation state. If you need context, send it in the prompt from the client.
 
 By default, the API prepends:
 
@@ -153,7 +139,7 @@ Example:
 curl -X POST "$BASE_URL/codex" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Create a Python function that reverses a string",
+    "prompt": "System context: We are comparing Python web frameworks.\nUser: What are the tradeoffs between FastAPI and Flask?",
     "timeout_s": 120,
     "include_events": true
   }'
@@ -170,57 +156,6 @@ Successful response shape:
   "stderr_text": null,
   "json_parse_errors": 0
 }
-```
-
-### `POST /codex/conv`
-
-Use this endpoint when you want files to persist between calls.
-
-Request body:
-
-```json
-{
-  "prompt": "Create train.py",
-  "conversation_id": "rl-demo-1",
-  "timeout_s": 600,
-  "include_events": false,
-  "include_raw_output": false,
-  "extra_args": []
-}
-```
-
-Field notes:
-
-- `conversation_id` (optional): if provided, reuses that workspace; if omitted, server creates one.
-- Workspace path defaults to `./conversations/<conversation_id>`.
-- Override base path with env var `CODEX_CONVERSATION_ROOT`.
-
-Successful response shape:
-
-```json
-{
-  "exit_code": 0,
-  "final_text": "...",
-  "events": null,
-  "stdout_text": null,
-  "stderr_text": null,
-  "json_parse_errors": 0,
-  "conversation_id": "rl-demo-1",
-  "workspace_dir": "/abs/path/to/conversations/rl-demo-1"
-}
-```
-
-Conversation example:
-
-```bash
-curl -X POST "$BASE_URL/codex/conv" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Create notes.txt with line hello",
-    "conversation_id": "my-rl-conv",
-    "timeout_s": 600,
-    "include_events": false
-  }'
 ```
 
 ## Error behavior

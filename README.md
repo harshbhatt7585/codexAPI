@@ -9,7 +9,7 @@ A minimal FastAPI service that executes `codex exec --json` and returns structur
 - Parses JSONL event output from `stdout`.
 - Extracts a best-effort `final_text` from events.
 - Prepends a default assistant-only instruction so requests stay in planning/Q&A mode and avoid file creation.
-- Exposes a single stateless `POST /codex` endpoint.
+- Exposes a single stateless `POST /codex/response/` endpoint.
 
 ## Project files
 
@@ -92,7 +92,7 @@ curl "$BASE_URL/health"
 4. Send a request:
 
 ```bash
-curl -X POST "$BASE_URL/codex" \
+curl -X POST "$BASE_URL/codex/response/" \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "What are three ways to reverse a string in Python?",
@@ -105,7 +105,7 @@ curl -X POST "$BASE_URL/codex" \
 
 ## API
 
-### `POST /codex`
+### `POST /codex/response/`
 
 Request body:
 
@@ -136,7 +136,7 @@ By default, the API prepends:
 Example:
 
 ```bash
-curl -X POST "$BASE_URL/codex" \
+curl -X POST "$BASE_URL/codex/response/" \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "System context: We are comparing Python web frameworks.\nUser: What are the tradeoffs between FastAPI and Flask?",

@@ -96,13 +96,8 @@ def _run_request(req: CodexRequest, workdir: str) -> CodexSuccessResponse:
     )
 
 
-@app.post("/codex", response_model=CodexSuccessResponse)
-def codex_endpoint(req: CodexRequest) -> CodexSuccessResponse:
+@app.post("/codex/response/", response_model=CodexSuccessResponse)
+def codex_response(req: CodexRequest) -> CodexSuccessResponse:
     # One request = one isolated temporary workspace.
     with tempfile.TemporaryDirectory(prefix="codex_sandbox_") as workdir:
         return _run_request(req, workdir=workdir)
-
-
-@app.post("/codex/", response_model=CodexSuccessResponse, include_in_schema=False)
-def codex_endpoint_with_slash(req: CodexRequest) -> CodexSuccessResponse:
-    return codex_endpoint(req)

@@ -30,12 +30,7 @@ class CodexRequest(BaseModel):
 
 
 class CodexSuccessResponse(BaseModel):
-    exit_code: int
-    final_text: Optional[str]
-    events: Optional[List[Dict[str, Any]]] = None
-    stdout_text: Optional[str] = None
-    stderr_text: Optional[str] = None
-    json_parse_errors: int
+    response: str
 
 
 app = FastAPI(title="Codex Exec API", version="0.1.0")
@@ -87,12 +82,7 @@ def _run_request(req: CodexRequest, workdir: str) -> CodexSuccessResponse:
         )
 
     return CodexSuccessResponse(
-        exit_code=result.exit_code,
-        final_text=extract_final_text(result.events),
-        events=result.events if req.include_events else None,
-        stdout_text=result.stdout_text if req.include_raw_output else None,
-        stderr_text=result.stderr_text if req.include_raw_output else None,
-        json_parse_errors=result.json_parse_errors,
+        response=extract_final_text(result.events),
     )
 
 

@@ -1,21 +1,21 @@
 # Codex CLI API
 
-A minimal FastAPI service that executes `codex exec --json` and returns structured results.
+A minimal stateless FastAPI wrapper around `codex exec --json`.
 
-## What it does
+## Endpoints
 
-- Accepts a prompt over HTTP.
-- Runs Codex in non-interactive JSON mode.
-- Parses JSONL event output from `stdout`.
-- Extracts a best-effort `final_text` from events.
-- Prepends a default assistant-only instruction so requests stay in planning/Q&A mode and avoid file creation.
-- Exposes a single stateless `POST /codex/response/` endpoint.
+- `GET /health`
+- `POST /codex/response/`
 
-## Project files
+`POST /codex/response/` returns a plain JSON response:
 
-- `app.py`: FastAPI app and HTTP endpoints.
-- `codex_runner.py`: subprocess execution, timeout handling, JSONL parsing, and final text extraction.
-- `requirements.txt`: runtime dependencies.
+```json
+{
+  "response": "..."
+}
+```
+
+The server does not keep conversation state. If you want context, send it in the `prompt` from the client.
 
 ## Requirements
 
@@ -29,143 +29,82 @@ A minimal FastAPI service that executes `codex exec --json` and returns structur
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-## Login
-
-Authenticate Codex CLI before starting the API:
-
-```bash
 codex login
 ```
 
-## Run locally
+## Run
+
+```bash
+./run_server.sh
+```
+
+Or directly:
 
 ```bash
 uvicorn app:app --host 0.0.0.0 --port 8001
 ```
 
-Or use the wrapper that checks Codex auth first:
+## Prompt Prefix
 
-```bash
-./run_server.sh
+Every request is automatically prefixed with:
+
+```text
+You are a friendly assistant. Only plan and answer users' questions. Do not create any files.
 ```
 
-Wrapper behavior:
+Override it with `CODEX_PROMPT_PREFIX`.
 
-- Runs `codex login status`.
-- If not authenticated, runs `codex login`.
-- Starts `uvicorn app:app --host 0.0.0.0 --port 8001` by default (`PORT` env var overrides).
-
-Optional overrides:
-
-```bash
-HOST=127.0.0.1 PORT=9000 APP_MODULE=app:app ./run_server.sh --reload
-```
-
-Prompt behavior:
-
-- Every request is automatically prefixed with: `You are a friendly assistant. Only plan and answer users' questions. Do not create any files.`
-- Override that prefix with `CODEX_PROMPT_PREFIX`.
-- Set `CODEX_PROMPT_PREFIX` to an empty string to disable prefixing entirely.
-
-## How to use (quickstart)
-
-1. Start the server:
-
-```bash
-./run_server.sh
-```
-
-2. Set your local API base URL (if server binds to `0.0.0.0:<PORT>`, call it as `127.0.0.1:<PORT>`):
+## Quickstart
 
 ```bash
 BASE_URL=http://127.0.0.1:8001
-```
 
-3. Verify service is up:
-
-```bash
 curl "$BASE_URL/health"
-```
 
-4. Send a request:
-
-```bash
 curl -X POST "$BASE_URL/codex/response/" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "What are three ways to reverse a string in Python?",
-    "timeout_s": 600,
-    "include_events": false
+    "prompt": "What are the tradeoffs between FastAPI and Flask?"
   }'
 ```
 
-5. If you want client-managed context, include prior turns in the `prompt` you send. The server does not keep conversation state.
+## Request Body
 
-## API
-
-### `POST /codex/response/`
-
-Request body:
+Minimal request:
 
 ```json
 {
-  "prompt": "Explain what a Python decorator is",
-  "timeout_s": 600,
-  "include_events": false,
-  "include_raw_output": false,
-  "extra_args": []
+  "prompt": "Explain what a Python decorator is"
 }
 ```
 
-Field notes:
+Supported fields:
 
-- `prompt` (required): non-empty string.
-- `timeout_s`: 1 to 1800 seconds (default `600`).
-- `include_events`: include parsed JSON events in response (default `false`).
-- `include_raw_output`: include raw `stdout_text`/`stderr_text` (default `false`).
-- `extra_args`: additional CLI flags passed to `codex exec --json`.
-- The server does not store conversation state. If you need context, send it in the prompt from the client.
+- `prompt`: required
+- `timeout_s`: optional, default `600`
+- `extra_args`: optional list of extra CLI args
+- `include_events`: accepted for compatibility, currently ignored by the response
+- `include_raw_output`: accepted for compatibility, currently ignored by the response
 
-By default, the API prepends:
+The API runs Codex with these default CLI args:
 
 - `--skip-git-repo-check`
 - `--sandbox workspace-write`
 
-Example:
+## Response Body
 
-```bash
-curl -X POST "$BASE_URL/codex/response/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "System context: We are comparing Python web frameworks.\nUser: What are the tradeoffs between FastAPI and Flask?",
-    "timeout_s": 120,
-    "include_events": false
-  }'
-```
-
-Successful response shape:
+Successful response:
 
 ```json
 {
-  "exit_code": 0,
-  "final_text": "...",
-  "events": [],
-  "stdout_text": null,
-  "stderr_text": null,
-  "json_parse_errors": 0
+  "response": "FastAPI gives you type-driven validation and automatic docs..."
 }
 ```
 
-## Error behavior
+## Failure Behavior
 
-- `504`: Codex process timed out.
-- `500`: Codex exited non-zero.
-- Error responses include `exit_code` and truncated `stdout`/`stderr` tails for debugging.
+This service is intentionally thin. It assumes the happy path.
 
-## Security and deployment notes
-
-- This service executes a local CLI process from user input.
-- Run in an isolated environment (container/VM) with strict CPU, memory, filesystem, and network controls.
-- Consider authentication/rate limiting before exposing this endpoint outside trusted networks.
+- If Codex fails, the API can return `500`
+- If Codex output is malformed, the API can fail
+- There is very little defensive handling by design
